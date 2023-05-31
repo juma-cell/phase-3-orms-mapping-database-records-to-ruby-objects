@@ -1,46 +1,20 @@
 class Song
+  attr_accessor :id, :name, :album
 
-  attr_accessor :name, :album, :id
-
-  def initialize(name:, album:, id: nil)
-    @id = id
+  def initialize(name:, album:)
+    @id = nil
     @name = name
     @album = album
   end
 
-  def self.drop_table
-    sql = <<-SQL
-      DROP TABLE IF EXISTS songs
-    SQL
-
-    DB[:conn].execute(sql)
-  end
-
   def self.create_table
-    sql = <<-SQL
-      CREATE TABLE IF NOT EXISTS songs (
-        id INTEGER PRIMARY KEY,
-        name TEXT,
-        album TEXT
-      )
-    SQL
-
-    DB[:conn].execute(sql)
+    DB[:conn].execute("CREATE TABLE IF NOT EXISTS songs (id INTEGER PRIMARY KEY, name TEXT, album TEXT)")
   end
 
   def save
-    sql = <<-SQL
-      INSERT INTO songs (name, album)
-      VALUES (?, ?)
-    SQL
-
-    # insert the song
-    DB[:conn].execute(sql, self.name, self.album)
-
-    # get the song ID from the database and save it to the Ruby instance
-    self.id = DB[:conn].execute("SELECT last_insert_rowid() FROM songs")[0][0]
-
-    # return the Ruby instance
+    sql = "INSERT INTO songs (name, album) VALUES (?, ?)"
+    DB[:conn].execute(sql, @name, @album)
+    @id = DB[:conn].execute("SELECT last_insert_rowid() FROM songs")[0][0]
     self
   end
 
@@ -49,4 +23,20 @@ class Song
     song.save
   end
 
+  def self.new_from_db(row)
+    id, name, album = row
+    Song.new(name: name, album: album).tap { |song| song.id = id }
+  end
+
+  def self.all
+    sql = "SELECT * FROM songs"
+    rows = DB[:conn].execute(sql)
+    rows.map { |row| new_from_db(row) }
+  end
+
+  def self.find_by_name(name)
+    sql = "SELECT * FROM songs WHERE name = ?"
+    row = DB[:conn].execute(sql, name).first
+    new_from_db(row) if row
+  end
 end
